@@ -505,6 +505,59 @@
     @media (max-width: 860px) {
       .sidebar, .panel { display: none; }
     }
+
+    /* ===================================================
+       VOICE INPUT — microfono
+    =================================================== */
+    .mic-btn {
+      width: 38px; height: 38px;
+      background: var(--bg); color: var(--text2);
+      border: 1.5px solid var(--border);
+      border-radius: 50%;
+      cursor: pointer; font-size: 17px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .15s;
+      flex-shrink: 0;
+    }
+    .mic-btn:hover { background: #fce8e6; border-color: var(--q1); color: var(--q1); }
+    .mic-btn.recording {
+      background: var(--q1) !important;
+      color: white !important;
+      border-color: var(--q1) !important;
+      animation: mic-pulse 1.1s infinite;
+    }
+    @keyframes mic-pulse {
+      0%,100% { box-shadow: 0 0 0 0   rgba(234,67,53,.45); }
+      50%      { box-shadow: 0 0 0 9px rgba(234,67,53,0);   }
+    }
+
+    /* ===================================================
+       VOICE OUTPUT — toggle header
+    =================================================== */
+    .voice-toggle {
+      background: var(--bg); color: var(--text2);
+      border: 1.5px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 11px; font-size: 12px; font-weight: 500;
+      cursor: pointer; transition: all .15s;
+      white-space: nowrap;
+    }
+    .voice-toggle.on {
+      background: #e8f0fe; color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    /* Indicatore ascolto in input */
+    .input-wrap.listening {
+      border-color: var(--q1);
+      background: #fff5f5;
+    }
+    #listenHint {
+      font-size: 11px; color: var(--q1);
+      padding: 0 4px; display: none; align-self: center;
+      animation: blink .9s infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
   </style>
 </head>
 <body>
@@ -532,6 +585,7 @@
   <div class="h-title">Personal Assistant <small>Fabrizio Lonatica</small></div>
   <div class="h-date" id="hDate">—</div>
   <div class="h-dot"  id="hDot" onclick="refreshData()" title="Aggiorna dati"></div>
+  <button class="voice-toggle on" id="voiceToggle" onclick="toggleVoice()">🔊 Voce</button>
 </header>
 
 <!-- ============================================================
@@ -612,12 +666,14 @@
       </div>
     </div>
     <div class="chat-input-row">
-      <div class="input-wrap">
+      <div class="input-wrap" id="inputWrap">
         <textarea id="chatInput" rows="1"
           placeholder="Scrivi un messaggio…"
           onkeydown="handleKey(event)"
           oninput="autoResize(this)"></textarea>
+        <span id="listenHint">● REC</span>
       </div>
+      <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Parla in italiano">🎤</button>
       <button class="send-btn" id="sendBtn" onclick="sendMessage()">↑</button>
     </div>
   </div>
@@ -898,6 +954,7 @@ async function sendMessage(override) {
     saveMsg('assistant', reply);
     chatHistory.push({ role: 'assistant', content: reply });
     extractActions(reply);
+    speakText(reply);
   } catch (err) {
     hideTyping();
     renderMsg('assistant', 'Errore di connessione. Riprova tra un momento.');
@@ -1236,6 +1293,139 @@ function fmtTime(iso) {
   try {
     return new Date(iso).toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
   } catch(_) { return iso; }
+}
+
+// ============================================================
+// SPEECH RECOGNITION — input vocale
+// ============================================================
+
+let recognition  = null;
+let isListening  = false;
+
+function initRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return null;
+
+  const r      = new SR();
+  r.lang        = 'it-IT';
+  r.interimResults = true;
+  r.maxAlternatives = 1;
+  r.continuous  = false;
+
+  r.onstart = () => {
+    isListening = true;
+    document.getElementById('micBtn').classList.add('recording');
+    document.getElementById('inputWrap').classList.add('listening');
+    document.getElementById('listenHint').style.display = 'inline';
+    document.getElementById('chatInput').placeholder = 'Sto ascoltando…';
+  };
+
+  r.onresult = (e) => {
+    const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+    const input = document.getElementById('chatInput');
+    input.value = transcript;
+    autoResize(input);
+
+    if (e.results[e.results.length - 1].isFinal) {
+      stopListening();
+      // Piccola pausa per far vedere il testo, poi invia
+      setTimeout(() => {
+        if (input.value.trim()) sendMessage();
+      }, 400);
+    }
+  };
+
+  r.onerror = (e) => {
+    stopListening();
+    if (e.error === 'not-allowed') {
+      alert('Microfono non autorizzato.\nVa in Preferenze di sistema → Privacy → Microfono e abilita il browser.');
+    }
+  };
+
+  r.onend = () => { stopListening(); };
+
+  return r;
+}
+
+function toggleMic() {
+  if (isListening) { stopListening(); return; }
+
+  if (!recognition) recognition = initRecognition();
+  if (!recognition) {
+    alert('Il tuo browser non supporta il riconoscimento vocale.\nUsa Chrome o Safari aggiornato.');
+    return;
+  }
+  try {
+    document.getElementById('chatInput').value = '';
+    recognition.start();
+  } catch(e) { console.error('Mic start error:', e); }
+}
+
+function stopListening() {
+  isListening = false;
+  document.getElementById('micBtn').classList.remove('recording');
+  document.getElementById('inputWrap').classList.remove('listening');
+  document.getElementById('listenHint').style.display = 'none';
+  document.getElementById('chatInput').placeholder = 'Scrivi un messaggio…';
+  try { if (recognition) recognition.stop(); } catch(_) {}
+}
+
+// ============================================================
+// SPEECH SYNTHESIS — risposta vocale femminile italiana
+// ============================================================
+
+let voiceEnabled  = true;
+let italianVoice  = null;
+const synth       = window.speechSynthesis;
+
+function loadVoices() {
+  const voices = synth.getVoices();
+  // Priorità: voci italiane femminili note su macOS / iOS
+  italianVoice =
+    voices.find(v => /alice|bianca|federica|silvia/i.test(v.name))  ||
+    voices.find(v => v.lang === 'it-IT' && v.localService)          ||
+    voices.find(v => v.lang === 'it-IT')                             ||
+    voices.find(v => v.lang.startsWith('it'))                        ||
+    null;
+}
+
+loadVoices();
+if (synth.onvoiceschanged !== undefined) synth.onvoiceschanged = loadVoices;
+
+function speakText(text) {
+  if (!voiceEnabled || !synth) return;
+
+  // Pulisci: rimuovi blocchi azione, markdown, emoji tecnici
+  let clean = text
+    .replace(/\[EVENTO:[^\]]+\]/g, '')
+    .replace(/\[BOZZA:[^\]]+\]/g, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/^#{1,3}\s+/gm, '')
+    .replace(/^[-•]\s+/gm, '')
+    .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+    .trim();
+
+  // Tronca a 550 caratteri: oltre si perde l'attenzione
+  if (clean.length > 550) clean = clean.substring(0, 550) + '…';
+
+  synth.cancel();
+
+  const utt    = new SpeechSynthesisUtterance(clean);
+  utt.lang     = 'it-IT';
+  utt.rate     = 1.05;
+  utt.pitch    = 1.15;
+  utt.volume   = 1;
+  if (italianVoice) utt.voice = italianVoice;
+
+  synth.speak(utt);
+}
+
+function toggleVoice() {
+  voiceEnabled = !voiceEnabled;
+  const btn = document.getElementById('voiceToggle');
+  btn.textContent = voiceEnabled ? '🔊 Voce' : '🔇 Muta';
+  btn.classList.toggle('on', voiceEnabled);
+  if (!voiceEnabled) synth.cancel();
 }
 </script>
 </body>
