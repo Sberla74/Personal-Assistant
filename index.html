@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Personal Assistant — Fabrizio</title>
+  <title>Jessica — Assistente di Fabrizio</title>
   <style>
     /* ===================================================
        VARIABLES & RESET
@@ -239,7 +239,18 @@
       font-size: 11px;
       font-weight: 700;
     }
-    .msg.assistant .msg-av { background: #f1f3f4; }
+    .msg.assistant .msg-av {
+      background: #e8f0fe;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .typing-av {
+      background: #e8f0fe !important;
+      color: var(--accent) !important;
+      font-size: 13px;
+      font-weight: 700;
+    }
 
     .msg-bbl {
       padding: 11px 15px;
@@ -567,9 +578,9 @@
 ============================================================ -->
 <div id="loginScreen">
   <div class="login-card">
-    <div class="login-logo">🧭</div>
-    <h2>Personal Assistant</h2>
-    <p>Accedi per continuare</p>
+    <div class="login-logo">✨</div>
+    <h2>Jessica</h2>
+    <p>Il tuo assistente personale</p>
     <input type="email"    id="lEmail" class="l-input" placeholder="Email" value="f.lonatica@gmail.com">
     <input type="password" id="lPwd"   class="l-input" placeholder="Password">
     <button class="l-btn" onclick="doLogin()">Accedi</button>
@@ -581,8 +592,8 @@
      HEADER
 ============================================================ -->
 <header>
-  <div class="h-logo">🧭</div>
-  <div class="h-title">Personal Assistant <small>Fabrizio Lonatica</small></div>
+  <div class="h-logo">✨</div>
+  <div class="h-title">Jessica <small>Assistente di Fabrizio</small></div>
   <div class="h-date" id="hDate">—</div>
   <div class="h-dot"  id="hDot" onclick="refreshData()" title="Aggiorna dati"></div>
   <button class="voice-toggle on" id="voiceToggle" onclick="toggleVoice()">🔊 Voce</button>
@@ -658,10 +669,10 @@
   <div class="chat">
     <div class="messages" id="messages">
       <div class="msg assistant">
-        <div class="msg-av">🧭</div>
+        <div class="msg-av">J</div>
         <div class="msg-bbl">
-          Ciao Fabrizio! Sono il tuo assistente personale.<br>
-          Posso aiutarti a classificare i task Covey, gestire le email, creare eventi in calendario e fare la review settimanale. Come posso aiutarti?
+          Ciao Fabrizio! Sono Jessica, il tuo assistente personale.<br>
+          Posso aiutarti a gestire le priorità Covey, le email, il calendario e fare la review settimanale. Puoi scrivermi o parlarmi direttamente. Come posso aiutarti?
         </div>
       </div>
     </div>
@@ -1011,7 +1022,7 @@ function buildSystemPrompt() {
     if (unread.length)  emailBlock += '\nNon lette: '  + unread.map(e => `"${e.subject}" (${e.from})`).join(', ');
   }
 
-  return `Sei l'assistente personale di Fabrizio Lonatica. Sei diretto, pratico e onesto. Rispondi in italiano. Sii conciso.
+  return `Sei Jessica, l'assistente personale di Fabrizio Lonatica. Il tuo nome è Jessica e ti presenti sempre come tale. Sei diretta, pratica e onesta. Hai un tono caldo ma professionale. Rispondi in italiano. Sii concisa — Fabrizio è impegnato.
 
 ## CHI È FABRIZIO
 Vicepresidente ASD Basket Scicli Meerkat. Gestisce MITA S.r.l.: strutture turistiche (Hotel San Bartolomeo, Casa Duna, Terrazza sul Mare, Villa Giò, Donnamisurata). Padre di Alessandro, marito di Elena.
@@ -1164,7 +1175,7 @@ function renderMsg(role, content) {
 
   const av  = document.createElement('div');
   av.className  = 'msg-av';
-  av.textContent = role === 'user' ? 'FL' : '🧭';
+  av.textContent = role === 'user' ? 'FL' : 'J';
 
   const bbl = document.createElement('div');
   bbl.className = 'msg-bbl';
@@ -1209,7 +1220,7 @@ function showTyping() {
   const div  = document.createElement('div');
   div.id        = 'typing';
   div.className = 'typing-wrap';
-  div.innerHTML = '<div class="typing-av">🧭</div><div class="typing-bbl"><span></span><span></span><span></span></div>';
+  div.innerHTML = '<div class="typing-av">J</div><div class="typing-bbl"><span></span><span></span><span></span></div>';
   msgs.appendChild(div);
   scrollBottom();
 }
@@ -1262,7 +1273,7 @@ function newChat() {
   pendingActions = [];
   const msgs = document.getElementById('messages');
   msgs.innerHTML = '';
-  renderMsg('assistant', 'Nuova chat iniziata. Come posso aiutarti?');
+  renderMsg('assistant', 'Nuova chat iniziata. Sono Jessica — come posso aiutarti?');
 }
 function refreshData() {
   loadCalendar();
