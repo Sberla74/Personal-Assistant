@@ -1008,7 +1008,11 @@ function buildSystemPrompt() {
   const todayEv = eventsData.filter(e => e.date === today);
   if (todayEv.length) {
     calBlock = '\n\n## CALENDARIO OGGI\n' +
-      todayEv.map(e => `- ${e.time || 'All day'} | ${e.title}${e.quadrant ? ' ['+e.quadrant+']' : ''}`).join('\n');
+      todayEv.map(e => {
+        const src = e.source === 'casa_manager' ? ' [struttura]' : '';
+        const q   = e.quadrant ? ' [' + e.quadrant + ']' : '';
+        return `- ${e.time || 'tutto il giorno'} | ${e.title}${q}${src}`;
+      }).join('\n');
   } else {
     calBlock = '\n\n## CALENDARIO OGGI\nNessun evento specifico.';
   }

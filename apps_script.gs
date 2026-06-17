@@ -11,8 +11,9 @@
  * 4. Copia l'URL e incollalo in index.html → APPS_SCRIPT_URL
  */
 
-var CALENDAR_ID = 'f.lonatica@gmail.com';
-var TIMEZONE    = 'Europe/Rome';
+var CALENDAR_ID    = 'f.lonatica@gmail.com';
+var CALENDAR_CM_ID = '8818e1f2c7d4c445d0d7c506ee5e00dee042067189e8294df0568fef600a84f7@group.calendar.google.com';
+var TIMEZONE       = 'Europe/Rome';
 
 var ID_TO_COLOR = {
   '11': CalendarApp.EventColor.RED,
@@ -95,38 +96,54 @@ function getEmails() {
 
 function getEvents(daysParam) {
   var days = parseInt(daysParam) || 5;
-  var cal  = CalendarApp.getCalendarById(CALENDAR_ID);
 
   var start = new Date();
   start.setHours(0, 0, 0, 0);
   var end = new Date(start);
   end.setDate(end.getDate() + days);
 
-  var raw    = cal.getEvents(start, end);
   var events = [];
 
-  raw.forEach(function(ev) {
+  // Calendario personale — filtra routine all-day senza Q
+  var calPersonale = CalendarApp.getCalendarById(CALENDAR_ID);
+  calPersonale.getEvents(start, end).forEach(function(ev) {
     var title = ev.getTitle();
-
-    // Salta all-day senza Q (routine quotidiane senza valore informativo)
     if (ev.isAllDayEvent() && !title.match(/Q[1-4]/i)) return;
-
-    var startTime = ev.getStartTime();
-
-    events.push({
-      id:       ev.getId(),
-      title:    title,
-      date:     Utilities.formatDate(startTime, TIMEZONE, 'dd/MM'),
-      time:     ev.isAllDayEvent() ? '' : Utilities.formatDate(startTime, TIMEZONE, 'HH:mm'),
-      startISO: Utilities.formatDate(startTime, TIMEZONE, "yyyy-MM-dd'T'HH:mm:ss"),
-      endISO:   Utilities.formatDate(ev.getEndTime(), TIMEZONE, "yyyy-MM-dd'T'HH:mm:ss"),
-      isAllDay: ev.isAllDayEvent(),
-      quadrant: detectQuadrant(ev),
-      desc:     ev.getDescription() || ''
-    });
+    events.push(buildEventObj(ev, 'personale'));
   });
 
+  // Calendario Casa Manager — include tutto (check-in, check-out, strutture)
+  try {
+    var calCM = CalendarApp.getCalendarById(CALENDAR_CM_ID);
+    if (calCM) {
+      calCM.getEvents(start, end).forEach(function(ev) {
+        events.push(buildEventObj(ev, 'casa_manager'));
+      });
+    }
+  } catch(e) {
+    // Calendario CM non accessibile — ignora silenziosamente
+  }
+
+  // Ordina per data/ora
+  events.sort(function(a, b) { return a.startISO.localeCompare(b.startISO); });
+
   return { events: events, count: events.length };
+}
+
+function buildEventObj(ev, source) {
+  var startTime = ev.getStartTime();
+  return {
+    id:       ev.getId(),
+    title:    ev.getTitle(),
+    date:     Utilities.formatDate(startTime, TIMEZONE, 'dd/MM'),
+    time:     ev.isAllDayEvent() ? '' : Utilities.formatDate(startTime, TIMEZONE, 'HH:mm'),
+    startISO: Utilities.formatDate(startTime, TIMEZONE, "yyyy-MM-dd'T'HH:mm:ss"),
+    endISO:   Utilities.formatDate(ev.getEndTime(), TIMEZONE, "yyyy-MM-dd'T'HH:mm:ss"),
+    isAllDay: ev.isAllDayEvent(),
+    quadrant: detectQuadrant(ev),
+    source:   source,
+    desc:     ev.getDescription() || ''
+  };
 }
 
 function detectQuadrant(ev) {
