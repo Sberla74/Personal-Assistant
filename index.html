@@ -513,9 +513,95 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
+    /* ===================================================
+       MOBILE — layout con bottom nav + bottom sheets
+    =================================================== */
     @media (max-width: 860px) {
-      .sidebar, .panel { display: none; }
+      .sidebar, .panel { display: none !important; }
+      .h-title small   { display: none; }
+      .h-date          { display: none; }
+      .voice-toggle    { padding: 4px 8px; font-size: 11px; }
+
+      /* Chat occupa tutto tranne header + bottom-nav */
+      .chat { padding-bottom: 0; }
+      .messages { padding: 12px 12px 10px; }
+
+      /* Bottom nav visibile */
+      .bottom-nav { display: flex !important; }
     }
+
+    /* Bottom navigation bar */
+    .bottom-nav {
+      display: none;
+      flex-shrink: 0;
+      height: calc(58px + env(safe-area-inset-bottom, 0px));
+      background: white;
+      border-top: 1px solid var(--border);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      z-index: 50;
+    }
+    .bn-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      cursor: pointer;
+      font-size: 10px;
+      color: var(--text2);
+      transition: color .15s;
+      padding-top: 6px;
+    }
+    .bn-item .bn-icon { font-size: 20px; line-height: 1; }
+    .bn-item.active   { color: var(--accent); }
+
+    /* Overlay scuro sotto i sheet */
+    .bs-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.35);
+      z-index: 98;
+    }
+    .bs-overlay.open { display: block; }
+
+    /* Bottom sheets */
+    .bottom-sheet {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: white;
+      border-radius: 20px 20px 0 0;
+      max-height: 75vh;
+      overflow-y: auto;
+      transform: translateY(100%);
+      transition: transform .3s cubic-bezier(.4,0,.2,1);
+      z-index: 99;
+      padding: 0 16px calc(16px + env(safe-area-inset-bottom, 0px));
+      box-shadow: 0 -4px 24px rgba(0,0,0,.15);
+    }
+    .bottom-sheet.open { transform: translateY(0); }
+    .bs-handle {
+      width: 40px; height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin: 12px auto 4px;
+    }
+    .bs-title {
+      font-size: 15px; font-weight: 600;
+      padding: 10px 0 12px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 10px;
+    }
+
+    /* Quick actions dentro sheet */
+    .mqa-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 13px 10px;
+      border-radius: 10px;
+      cursor: pointer; font-size: 14px;
+      transition: background .15s;
+    }
+    .mqa-item:hover, .mqa-item:active { background: var(--bg); }
 
     /* ===================================================
        VOICE INPUT — microfono
@@ -703,6 +789,65 @@
 
 </div>
 <!-- /APP -->
+
+<!-- ============================================================
+     MOBILE — Bottom Nav
+============================================================ -->
+<nav class="bottom-nav" id="bottomNav">
+  <div class="bn-item active" id="bnChat" onclick="mobileTab('chat')">
+    <span class="bn-icon">💬</span><span>Chat</span>
+  </div>
+  <div class="bn-item" id="bnCal" onclick="mobileTab('cal')">
+    <span class="bn-icon">📅</span><span>Calendario</span>
+  </div>
+  <div class="bn-item" id="bnEmail" onclick="mobileTab('email')">
+    <span class="bn-icon">📧</span><span>Gmail</span>
+  </div>
+  <div class="bn-item" id="bnAzioni" onclick="mobileTab('azioni')">
+    <span class="bn-icon">⚡</span><span>Azioni</span>
+  </div>
+</nav>
+
+<!-- Overlay -->
+<div class="bs-overlay" id="bsOverlay" onclick="closeSheets()"></div>
+
+<!-- Sheet: Calendario -->
+<div class="bottom-sheet" id="sheetCal">
+  <div class="bs-handle"></div>
+  <div class="bs-title">📅 Calendario</div>
+  <div id="mobileCalBody"><div class="p-spin">Caricamento…</div></div>
+</div>
+
+<!-- Sheet: Gmail -->
+<div class="bottom-sheet" id="sheetEmail">
+  <div class="bs-handle"></div>
+  <div class="bs-title">📧 Gmail</div>
+  <div id="mobileEmailBody"><div class="p-spin">Caricamento…</div></div>
+</div>
+
+<!-- Sheet: Azioni rapide + Note iPhone -->
+<div class="bottom-sheet" id="sheetAzioni">
+  <div class="bs-handle"></div>
+  <div class="bs-title">⚡ Azioni rapide</div>
+  <div class="mqa-item" onclick="closeSheets(); quickMsg('Cosa ho di urgente oggi e domani?')">
+    <span>📅</span> Agenda di oggi
+  </div>
+  <div class="mqa-item" onclick="closeSheets(); quickMsg('Analizza le mie email urgenti con stelle: cosa faccio?')">
+    <span>📧</span> Email urgenti
+  </div>
+  <div class="mqa-item" onclick="closeSheets(); quickMsg('Dammi le 3 priorità Q2 su cui concentrarmi questa settimana')">
+    <span>🎯</span> Priorità Q2 settimana
+  </div>
+  <div class="mqa-item" onclick="closeSheets(); quickMsg('Sto trascurando qualche area vita? Specialmente le Finanze.')">
+    <span>⚠️</span> Aree trascurate
+  </div>
+  <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:14px;">
+    <div class="sb-label" style="margin-bottom:8px;">NOTE IPHONE</div>
+    <textarea id="mobileNote" class="note-ta" placeholder="Incolla qui le note dall'iPhone…" style="height:90px"></textarea>
+    <button class="note-btn"   onclick="closeSheets(); sendMobileNote()">Analizza con Covey</button>
+    <button class="review-btn" onclick="closeSheets(); sendMobileReview()">🧭 Review settimanale</button>
+  </div>
+</div>
 
 <!-- ============================================================
      FIREBASE SDK
@@ -1314,6 +1459,62 @@ function fmtTime(iso) {
   try {
     return new Date(iso).toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
   } catch(_) { return iso; }
+}
+
+// ============================================================
+// MOBILE — Bottom nav e bottom sheets
+// ============================================================
+
+function mobileTab(tab) {
+  // Aggiorna nav
+  ['Chat','Cal','Email','Azioni'].forEach(t => {
+    document.getElementById('bn' + t).classList.toggle('active', t.toLowerCase() === tab);
+  });
+
+  if (tab === 'chat') { closeSheets(false); return; }
+
+  // Popola e apri lo sheet corretto
+  closeSheets(false);
+  document.getElementById('bsOverlay').classList.add('open');
+
+  if (tab === 'cal') {
+    document.getElementById('mobileCalBody').innerHTML =
+      document.getElementById('bodyCal').innerHTML;
+    document.getElementById('sheetCal').classList.add('open');
+  } else if (tab === 'email') {
+    document.getElementById('mobileEmailBody').innerHTML =
+      document.getElementById('bodyEm').innerHTML;
+    document.getElementById('sheetEmail').classList.add('open');
+  } else if (tab === 'azioni') {
+    document.getElementById('sheetAzioni').classList.add('open');
+  }
+}
+
+function closeSheets(resetNav = true) {
+  document.getElementById('bsOverlay').classList.remove('open');
+  document.querySelectorAll('.bottom-sheet').forEach(el => el.classList.remove('open'));
+  if (resetNav) {
+    ['Chat','Cal','Email','Azioni'].forEach(t => {
+      document.getElementById('bn' + t).classList.toggle('active', t === 'Chat');
+    });
+  }
+}
+
+function sendMobileNote() {
+  const n = document.getElementById('mobileNote').value.trim();
+  if (!n) return;
+  sendMessage('Analizza queste note con il sistema Covey — classificale Q1-Q4 × 6 aree vita:\n\n' + n);
+  document.getElementById('mobileNote').value = '';
+}
+
+function sendMobileReview() {
+  const n = document.getElementById('mobileNote').value.trim();
+  if (n) {
+    sendMessage('Review settimana — classifica Q1-Q4 × 6 aree vita, dimmi le 3 priorità Q2 e proponi eventi calendario:\n\n' + n);
+    document.getElementById('mobileNote').value = '';
+  } else {
+    sendMessage('Partiamo con la review settimanale. Cosa mi chiedi di portare?');
+  }
 }
 
 // ============================================================
