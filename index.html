@@ -1004,17 +1004,22 @@ function buildSystemPrompt() {
   const timeStr = now.toTimeString().slice(0,5);
   const today   = todayLabel();
 
-  let calBlock = '';
-  const todayEv = eventsData.filter(e => e.date === today);
-  if (todayEv.length) {
-    calBlock = '\n\n## CALENDARIO OGGI\n' +
-      todayEv.map(e => {
+  let calBlock = '\n\n## CALENDARIO (oggi + prossimi 5 giorni)\n';
+  const byDate = {};
+  eventsData.forEach(e => { if (!byDate[e.date]) byDate[e.date] = []; byDate[e.date].push(e); });
+  const sortedDates = Object.keys(byDate).sort();
+  if (sortedDates.length === 0) {
+    calBlock += 'Nessun evento nei prossimi giorni.';
+  } else {
+    sortedDates.forEach(date => {
+      const label = date === today ? `**Oggi (${date})**` : `**${date}**`;
+      calBlock += `\n${label}\n`;
+      byDate[date].forEach(e => {
         const src = e.source === 'casa_manager' ? ' [struttura]' : '';
         const q   = e.quadrant ? ' [' + e.quadrant + ']' : '';
-        return `- ${e.time || 'tutto il giorno'} | ${e.title}${q}${src}`;
-      }).join('\n');
-  } else {
-    calBlock = '\n\n## CALENDARIO OGGI\nNessun evento specifico.';
+        calBlock += `- ${e.time || 'tutto il giorno'} | ${e.title}${q}${src}\n`;
+      });
+    });
   }
 
   let emailBlock = '';
@@ -1030,6 +1035,7 @@ function buildSystemPrompt() {
 
 ## CHI È FABRIZIO
 Vicepresidente ASD Basket Scicli Meerkat. Gestisce MITA S.r.l.: strutture turistiche (Hotel San Bartolomeo, Casa Duna, Terrazza sul Mare, Villa Giò, Donnamisurata). Padre di Alessandro, marito di Elena.
+Gestisce le prenotazioni tramite **Casa Manager** (app custom su casa-manager-24414 Firebase). NON usare mai nomi di altri gestionali (Polly, Lodgify, Smoobu, ecc.) — non li usa. Se mancano dati, dì che non li hai nel calendario, non inventare strumenti.
 
 ## SISTEMA COVEY
 - Q1 🔥 Urgente + Importante → gestire subito | calendario: rosso (colorId=11)
