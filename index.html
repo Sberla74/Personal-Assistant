@@ -884,10 +884,11 @@ firebase.initializeApp(FB_CONFIG);
 const fbAuth = firebase.auth();
 const fbDb   = firebase.database();
 
-let chatHistory = [];   // [{role, content}]
-let eventsData  = [];   // dal Calendar
-let emailsData  = [];   // da Gmail
-let pendingActions = []; // action objects per indice
+let chatHistory    = [];  // [{role, content}]
+let eventsData     = [];  // dal Calendar
+let emailsData     = [];  // da Gmail
+let bookingsData   = [];  // da Firebase Casa Manager
+let pendingActions = [];  // action objects per indice
 
 // ============================================================
 // AUTH
@@ -929,6 +930,7 @@ function bootApp() {
   loadHistory();
   loadCalendar();
   loadEmails();
+  loadBookings();
 }
 
 function renderHeaderDate() {
@@ -1176,11 +1178,14 @@ function buildSystemPrompt() {
     if (unread.length)  emailBlock += '\nNon lette: '  + unread.map(e => `"${e.subject}" (${e.from})`).join(', ');
   }
 
+  const bookingsBlock = buildBookingsBlock();
+
   return `Sei Jessica, l'assistente personale di Fabrizio Lonatica. Il tuo nome è Jessica e ti presenti sempre come tale. Sei diretta, pratica e onesta. Hai un tono caldo ma professionale. Rispondi in italiano. Sii concisa — Fabrizio è impegnato.
 
 ## CHI È FABRIZIO
 Vicepresidente ASD Basket Scicli Meerkat. Gestisce MITA S.r.l.: strutture turistiche (Hotel San Bartolomeo, Casa Duna, Terrazza sul Mare, Villa Giò, Donnamisurata). Padre di Alessandro, marito di Elena.
-Gestisce le prenotazioni tramite **Casa Manager** (app custom su casa-manager-24414 Firebase). NON usare mai nomi di altri gestionali (Polly, Lodgify, Smoobu, ecc.) — non li usa. Se mancano dati, dì che non li hai nel calendario, non inventare strumenti.
+Gestisce le prenotazioni tramite **Casa Manager** (app custom su casa-manager-24414 Firebase). NON usare mai nomi di altri gestionali (Polly, Lodgify, Smoobu, ecc.) — non li usa. Se mancano dati, dì che non li hai nel contesto, non inventare.
+Quando ti chiede di occupazione, arrivi, partenze o ospiti usa i dati nella sezione PRENOTAZIONI CASA MANAGER qui sotto. Puoi rispondere su: chi è in casa, chi arriva/parte oggi, quante strutture sono occupate, arrivi nei prossimi giorni.
 
 ## SISTEMA COVEY
 - Q1 🔥 Urgente + Importante → gestire subito | calendario: rosso (colorId=11)
@@ -1196,6 +1201,8 @@ Lavoro (strutture turistiche) | Famiglia (padre/marito/figlio) | Salute (fitness
 06:15–07:00 Palestra | 08:00–11:00 🔥 Q1 operativo | 11:00–11:15 ⚡ slot Q3 | 11:30–13:00 ⭐ Q2 studio/piano | 21:30–22:00 ⭐ Q2 famiglia/personale
 
 ## OGGI: ${dateStr} ore ${timeStr}${calBlock}${emailBlock}
+
+${bookingsBlock}
 
 ## ISTRUZIONI PER LE AZIONI
 Quando vuoi creare un evento calendario, scrivi ESATTAMENTE (una riga):
@@ -1459,6 +1466,86 @@ function fmtTime(iso) {
   try {
     return new Date(iso).toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
   } catch(_) { return iso; }
+}
+
+// ============================================================
+// CASA MANAGER — lettura prenotazioni da Firebase
+// ============================================================
+
+async function loadBookings() {
+  try {
+    const snap = await fbDb.ref('prenotazioni').once('value');
+    const raw  = snap.val();
+    if (!raw) { bookingsData = []; return; }
+
+    const today = new Date(); today.setHours(0,0,0,0);
+    const list  = [];
+
+    Object.entries(raw).forEach(([id, bk]) => {
+      if (!bk || typeof bk !== 'object') return;
+
+      // Prova varianti di nomi campo (Casa Manager usa questi)
+      const ci     = bk.checkIn    || bk.check_in  || bk.ci       || bk.arrivo    || '';
+      const co     = bk.checkOut   || bk.check_out || bk.co       || bk.partenza  || '';
+      const guest  = bk.guest      || bk.nome      || bk.ospite   || bk.guestName || bk.cognome || '—';
+      const strut  = bk.struttura  || bk.structure || bk.hotel    || bk.property  || '—';
+      const camera = bk.camera     || bk.room      || bk.stanza   || '';
+      const stato  = bk.stato      || bk.status    || '';
+
+      if (!ci || !co) return;
+      const ciD = new Date(ci);
+      const coD = new Date(co);
+      if (isNaN(ciD) || isNaN(coD) || coD < today) return;
+
+      list.push({ id, ci, co, ciD, coD, guest, strut, camera, stato });
+    });
+
+    list.sort((a, b) => a.ciD - b.ciD);
+    bookingsData = list.slice(0, 80);
+  } catch(e) {
+    console.error('loadBookings:', e);
+    bookingsData = [];
+  }
+}
+
+function buildBookingsBlock() {
+  if (!bookingsData.length) return '';
+
+  const today    = new Date(); today.setHours(0,0,0,0);
+  const in14     = new Date(today); in14.setDate(in14.getDate() + 14);
+  const ts       = d => { const x = new Date(d); x.setHours(0,0,0,0); return x.getTime(); };
+  const todayTs  = today.getTime();
+
+  const inHouse      = bookingsData.filter(b => ts(b.ci) <= todayTs && ts(b.co) > todayTs);
+  const arriviOggi   = bookingsData.filter(b => ts(b.ci) === todayTs);
+  const partenzeOggi = bookingsData.filter(b => ts(b.co) === todayTs);
+  const prossimi     = bookingsData.filter(b => ts(b.ci) > todayTs && b.ciD <= in14);
+
+  const fmt = b => `${b.strut}${b.camera ? ' cam.'+b.camera : ''} | ${b.guest}`;
+
+  let block = '\n\n## PRENOTAZIONI CASA MANAGER';
+
+  if (inHouse.length)
+    block += '\n**Ospiti in casa ora:**\n' + inHouse.map(b => `- ${fmt(b)} | CO: ${fmtDS(b.co)}`).join('\n');
+  if (arriviOggi.length)
+    block += '\n**Check-in oggi:**\n'  + arriviOggi.map(b   => `- ${fmt(b)}`).join('\n');
+  if (partenzeOggi.length)
+    block += '\n**Check-out oggi:**\n' + partenzeOggi.map(b  => `- ${fmt(b)}`).join('\n');
+  if (prossimi.length)
+    block += '\n**Prossimi 14 giorni:**\n' + prossimi.slice(0,20).map(b =>
+      `- CI:${fmtDS(b.ci)} CO:${fmtDS(b.co)} | ${fmt(b)}`).join('\n');
+
+  if (!inHouse.length && !arriviOggi.length && !partenzeOggi.length && !prossimi.length)
+    block += '\nNessuna prenotazione attiva nelle prossime 2 settimane.';
+
+  return block;
+}
+
+function fmtDS(dateStr) {
+  try {
+    const d = new Date(dateStr);
+    return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0');
+  } catch(_) { return dateStr; }
 }
 
 // ============================================================
