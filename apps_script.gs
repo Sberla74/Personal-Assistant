@@ -14,6 +14,7 @@
 var CALENDAR_ID    = 'f.lonatica@gmail.com';
 var CALENDAR_CM_ID = '8818e1f2c7d4c445d0d7c506ee5e00dee042067189e8294df0568fef600a84f7@group.calendar.google.com';
 var TIMEZONE       = 'Europe/Rome';
+var BRAVE_API_KEY  = 'BSAzmZLN1Gh3qYu5fb3IXjoPGDPVfc3';
 
 var ID_TO_COLOR = {
   '11': CalendarApp.EventColor.RED,
@@ -44,6 +45,7 @@ function doGet(e) {
       case 'getEvents':    result = getEvents(params.days); break;
       case 'createEvent':  result = createCalEvent(params); break;
       case 'createDraft':  result = createGmailDraft(params); break;
+      case 'search':       result = webSearch(params);  break;
       case 'ping':         result = { ok: true, ts: new Date().toISOString() }; break;
       default:             result = { error: 'Unknown action: ' + action };
     }
@@ -184,6 +186,48 @@ function createCalEvent(params) {
     eventId: ev.getId(),
     date:    Utilities.formatDate(start, TIMEZONE, 'EEE dd/MM HH:mm')
   };
+}
+
+// ----------------------------------------------------------------
+// WEB SEARCH — Brave Search API
+// ----------------------------------------------------------------
+
+function webSearch(params) {
+  var q = params.q;
+  if (!q) return { error: 'Missing query' };
+
+  var url = 'https://api.search.brave.com/res/v1/web/search'
+    + '?q='            + encodeURIComponent(q)
+    + '&count=5'
+    + '&country=IT'
+    + '&search_lang=it'
+    + '&ui_lang=it-IT';
+
+  try {
+    var res  = UrlFetchApp.fetch(url, {
+      headers: {
+        'Accept':               'application/json',
+        'Accept-Encoding':      'gzip',
+        'X-Subscription-Token': BRAVE_API_KEY
+      },
+      muteHttpExceptions: true
+    });
+
+    var data = JSON.parse(res.getContentText());
+
+    if (!data.web || !data.web.results || data.web.results.length === 0) {
+      return { results: 'Nessun risultato trovato per: ' + q };
+    }
+
+    var results = data.web.results.slice(0, 5).map(function(r) {
+      return '**' + r.title + '**\n' + r.url + '\n' + (r.description || '') + '\n';
+    }).join('\n---\n');
+
+    return { results: results, query: q, count: data.web.results.length };
+
+  } catch(e) {
+    return { error: 'Errore ricerca: ' + e.message };
+  }
 }
 
 // ----------------------------------------------------------------

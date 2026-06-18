@@ -1123,23 +1123,59 @@ async function sendMessage(override) {
 }
 
 async function callClaude() {
-  const msgs = chatHistory.slice(-22);
-  const body = {
-    model:      CLAUDE_MODEL,
-    max_tokens: 1800,
-    system:     buildSystemPrompt(),
-    messages:   msgs
-  };
+  const system  = buildSystemPrompt();
+  let   msgs    = chatHistory.slice(-22).map(m => ({ role: m.role, content: m.content }));
 
-  const res = await fetch(PROXY_URL, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify(body)
-  });
+  const tools = [{
+    name:        'web_search',
+    description: 'Cerca informazioni aggiornate su internet: notizie, prezzi, meteo, normative, eventi, qualsiasi dato che potrebbe essere cambiato. Usa query in italiano o inglese.',
+    input_schema: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'Query di ricerca' } },
+      required:   ['query']
+    }
+  }];
 
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  const data = await res.json();
-  return data.content[0].text;
+  for (let round = 0; round < 4; round++) {
+    const res = await fetch(PROXY_URL, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 2000, system, messages: msgs, tools })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    // Risposta finale
+    if (data.stop_reason === 'end_turn') {
+      const textBlock = (data.content || []).find(b => b.type === 'text');
+      return textBlock ? textBlock.text : '';
+    }
+
+    // Claude vuole cercare
+    if (data.stop_reason === 'tool_use') {
+      const tu = (data.content || []).find(b => b.type === 'tool_use' && b.name === 'web_search');
+      if (!tu) break;
+
+      // Mostra indicatore di ricerca
+      updateTypingText('Sto cercando: ' + tu.input.query + '…');
+
+      let searchResult = 'Nessun risultato.';
+      try {
+        const r  = await fetch(APPS_SCRIPT_URL + '?action=search&q=' + encodeURIComponent(tu.input.query));
+        const d  = await r.json();
+        searchResult = d.results || d.error || 'Nessun risultato.';
+      } catch(e) { searchResult = 'Errore ricerca: ' + e.message; }
+
+      msgs = [...msgs,
+        { role: 'assistant', content: data.content },
+        { role: 'user',      content: [{ type: 'tool_result', tool_use_id: tu.id, content: searchResult }] }
+      ];
+    } else {
+      const textBlock = (data.content || []).find(b => b.type === 'text');
+      return textBlock ? textBlock.text : '';
+    }
+  }
+  return 'Limite di ricerche raggiunto.';
 }
 
 function buildSystemPrompt() {
@@ -1389,6 +1425,13 @@ function showTyping() {
 function hideTyping() {
   const t = document.getElementById('typing');
   if (t) t.remove();
+}
+
+function updateTypingText(text) {
+  const t = document.getElementById('typing');
+  if (!t) return;
+  const bbl = t.querySelector('.typing-bbl');
+  if (bbl) bbl.innerHTML = `<span style="font-size:12px;color:var(--text2)">${esc(text)}</span>`;
 }
 
 function setBusy(b) {
